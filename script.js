@@ -34,6 +34,20 @@ function add2Display(input) {
     return;
   }
 
+  let lastNumber = current.split(/[-+*/%]/).pop() ?? "";
+
+  if (input === "0") {
+    if ((lastNumber === "0" || lastNumber === "-0") && !lastNumber.includes(".")) {
+      return;
+    }
+  }
+
+  if (/^[1-9]$/.test(input) && (lastNumber === "0" || lastNumber === "-0")) {
+    let prefix = current.slice(0, -lastNumber.length);
+    display.value = prefix + (lastNumber.startsWith("-") ? "-" + input : input);
+    return;
+  }
+
    if (input === ".") {
     if (current === "" || operators.includes(lastChar)) {
       display.value += "0.";
@@ -83,19 +97,26 @@ function calculate() {
     let expression;
     const opRegex = /[+\-*/]$/;
     if (opRegex.test(rawDisplay)) {
-      const numOpRegex = /(-?[0-9]*\.?[0-9]+)([+\-*/])$/;
-      const match = rawDisplay.match(numOpRegex);
+      // Handle incomplete decimal like "0." or "5."
+      let fixed = rawDisplay.replace(/\.([+\-*/])$/, "$10");
+      let numOpRegex = /(-?[0-9]*\.?[0-9]*)([+\-*/])$/;
+      const match = fixed.match(numOpRegex);
       if (match) {
-        const lastNum = match[1];
-        expression = rawDisplay + lastNum;
+        let lastNum = match[1];
+        if (lastNum === "" || lastNum === "-" || lastNum.endsWith(".")) {
+          lastNum = lastNum.replace(".", "") || "0";
+        }
+        expression = fixed + (lastNum || display.value.split(/[-+*/]/).filter(Boolean).pop() || "0");
       } else {
-        throw Error();
+        // Default fallback for expressions like "5+"
+        expression = rawDisplay + "0";
       }
     } else {
       expression = rawDisplay;
     }
 
     let processed = preprocessPercentage(expression);
+    console.log("Evaluating:", expression);
     let result = eval(processed);
 
     if (!isFinite(result) || isNaN(result)) {
