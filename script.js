@@ -69,7 +69,7 @@ function calculate() {
       (rawDisplay === "" || justCalculated || String(rawDisplay) === String(lastResult)) &&
       lastOperator &&
       lastOperand != null
-    ) { 
+    ) {
       const repeatExpr = `${lastResult}${lastOperator}${lastOperand}`;
       let repeatResult = eval(repeatExpr);
       if (!isFinite(repeatResult)) throw Error();
@@ -80,8 +80,23 @@ function calculate() {
       return;
     }
 
-    let expression = preprocessPercentage(rawDisplay);
-    let result = eval(expression);
+    let expression;
+    const opRegex = /[+\-*/]$/;
+    if (opRegex.test(rawDisplay)) {
+      const numOpRegex = /(-?[0-9]*\.?[0-9]+)([+\-*/])$/;
+      const match = rawDisplay.match(numOpRegex);
+      if (match) {
+        const lastNum = match[1];
+        expression = rawDisplay + lastNum;
+      } else {
+        throw Error();
+      }
+    } else {
+      expression = rawDisplay;
+    }
+
+    let processed = preprocessPercentage(expression);
+    let result = eval(processed);
 
     if (!isFinite(result) || isNaN(result)) {
       display.value = "Error";
@@ -92,7 +107,7 @@ function calculate() {
     result = parseFloat(result.toFixed(6));
 
     // Extract last operator & operand for repeat "=" logic
-    const match = rawDisplay.match(/(.+?)([+\-*/])\s*(-?\d+(\.\d+)?)\s*$/);
+    const match = expression.match(/(.+?)([+\-*/])(-?\d+(\.\d+)?)$/);
     if (match) {
       lastResult = result;
       lastOperator = match[2];
