@@ -94,21 +94,33 @@ function calculate() {
       return;
     }
 
-    let expression;
     const opRegex = /[+\-*/]$/;
+    let expression;
+
     if (opRegex.test(rawDisplay)) {
-      // Handle incomplete decimal like "0." or "5."
-      let fixed = rawDisplay.replace(/\.([+\-*/])$/, "$10");
-      let numOpRegex = /(-?[0-9]*\.?[0-9]*)([+\-*/])$/;
-      const match = fixed.match(numOpRegex);
-      if (match) {
-        let lastNum = match[1];
-        if (lastNum === "" || lastNum === "-" || lastNum.endsWith(".")) {
-          lastNum = lastNum.replace(".", "") || "0";
+      const m = rawDisplay.match(/(.+?)([+\-*/])$/);
+      if (m) {
+        let prefix = m[1];      // part before the operator (may end with a dot)
+        const op = m[2];       // the trailing operator
+
+        // find the last complete number before the operator
+        let lastNumMatch = prefix.match(/(-?\d+(\.\d+)?)$/);
+
+        // If no match, prefix may end with a dot (e.g. "5.") — try trimming the dot
+        if (!lastNumMatch) {
+          const prefixTrim = prefix.replace(/\.$/, "");
+          lastNumMatch = prefixTrim.match(/(-?\d+(\.\d+)?)$/);
         }
-        expression = fixed + (lastNum || display.value.split(/[-+*/]/).filter(Boolean).pop() || "0");
+
+        // decide operand to append:
+        // - if we found a number before operator, use it (MS-style repeat)
+        // - otherwise default to "0"
+        const operandToUse = lastNumMatch ? lastNumMatch[1] : "0";
+
+        // final expression: e.g. "5.+" -> "5.+5" ; "0.+" -> "0.+0"
+        expression = rawDisplay + operandToUse;
       } else {
-        // Default fallback for expressions like "5+"
+        // fallback
         expression = rawDisplay + "0";
       }
     } else {
@@ -185,21 +197,14 @@ function toggleSign() {
   }
 }
 
-display.addEventListener("input", () => {
-  if (display.value === "Error") {
-    display.value = "";
-    return;
-  }
-
-  display.value = display.value.replace(/[^0-9+\-*/%.()]/g, "");
-  display.value = display.value.replace(/([+\-*/%]){2,}/g, "$1");
-  display.value = display.value.replace(/^[+*/%]+/, "");
-});
-
 document.addEventListener("keydown", (event) => {
   const key = event.key;
 
-  if (document.activeElement === display) return;
+  if (key === "=") {
+    event.preventDefault();
+    calculate();
+    return;
+  }
 
   if (key === "Enter") {
     event.preventDefault();
@@ -215,12 +220,14 @@ document.addEventListener("keydown", (event) => {
 
   if (key === "Escape" || key === "Delete") {
     event.preventDefault();
-    clearDisplay();
+    clearDisplay(); 
     return;
   }
 
-  if (/^[0-9+\-*/%.()]$/.test(key)) {
-    event.preventDefault();
+  const allowed = "0123456789.+-*/%()";
+
+  if (allowed.includes(key)) {
+    event.preventDefault();     
     add2Display(key);
     return;
   }

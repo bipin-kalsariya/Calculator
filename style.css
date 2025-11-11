@@ -85,6 +85,9 @@ input::-webkit-inner-spin-button {
   font-weight: 400;
   color: #000000;
   caret-color: transparent;
+  overflow-x: auto;
+  white-space: nowrap;
+  text-overflow: clip;
 }
 
 .display::placeholder {
