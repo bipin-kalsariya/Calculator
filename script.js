@@ -1,225 +1,147 @@
-let display = document.getElementById("display");
-let lastResult = null;
+const display = document.getElementById('display');
+
 let lastOperator = null;
 let lastOperand = null;
-let justCalculated = false;
 
-function showOnDisplay(val) {
-  display.value = val;
-  try {
-    display.setSelectionRange(display.value.length, display.value.length);
-  } catch (e) { }
-  display.scrollLeft = display.scrollWidth;
-}
-
-function add2Display(input) {
-  if (display.value === "Error") showOnDisplay("");
-
-  if (justCalculated && /^[0-9.]$/.test(input)) {
-    showOnDisplay("");
-    justCalculated = false;
-  } else {
-    justCalculated = false;
-  }
-
-  let current = display.value;
-  let lastChar = display.value.slice(-1);
-  let operators = "+-*/%";  
-
-  if (input === "±") {
+function add2Display(value) {
+  if (value === '±') {
     toggleSign();
     return;
   }
-
-  if (current === "" && operators.includes(input) && input !== "-") {
+  if (value === '%') {
+    percent();
     return;
   }
 
-  if (operators.includes(lastChar) && operators.includes(input)) {
-    current = current.slice(0, -1) + input;
-    showOnDisplay(current);
+  const operators = ['+', '-', '*', '/', '%'];
+  const current = display.value;
+  const lastChar = current.slice(-1);
+  const normalizedLast = lastChar.replace('×', '*').replace('÷', '/').replace('−', '-');
+  const normalizedValue = value.replace('×', '*').replace('÷', '/').replace('−', '-');
+
+  if (operators.includes(normalizedLast) && operators.includes(normalizedValue)) {
+    display.value = current.slice(0, -1) + value;
     return;
   }
 
-  let lastNumber = current.split(/[-+*/%]/).pop() ?? "";
-
-  if (input === "0") {
-    if ((lastNumber === "0" || lastNumber === "-0") && !lastNumber.includes(".")) {
-      return;
-    }
+  if (current === "0" && !operators.includes(normalizedValue) && value !== ".") {
+    display.value = value;
+  } else {
+    display.value = current + value;
   }
-
-  if (/^[1-9]$/.test(input) && (lastNumber === "0" || lastNumber === "-0")) {
-    let prefix = current.slice(0, -lastNumber.length);
-    showOnDisplay(prefix + (lastNumber.startsWith("-") ? "-" + input : input));
-    return;
-  }
-
-   if (input === ".") {
-    if (current === "" || operators.includes(lastChar)) {
-      showOnDisplay(current + "0.");
-      return;
-    }
-
-    let lastNumber = current.split(/[-+*/%]/).pop();
-    if (lastNumber.includes(".")) return;
-   }
-
-  showOnDisplay(current + input);
 }
 
 function clearDisplay() {
-  showOnDisplay("");
-  lastResult = null;
+  display.value = "0";
   lastOperator = null;
   lastOperand = null;
-  justCalculated = false;
 }
 
 function back() {
-  showOnDisplay(display.value.slice(0, -1));
-} 
+  display.value = display.value.slice(0, -1) || "0";
+}
 
-function toggleSign() {
-  if (display.value === "") {
-    showOnDisplay("-");
-    return;
-  }
-
-  let match = display.value.match(/(-?\d+(\.\d+)?)$/);
-  if (match) {
-    let num = match[0];
-    let start = display.value.slice(0, -num.length);
-    if (num.startsWith("-")) {
-      showOnDisplay(start + num.slice(1));
-    } else {
-      showOnDisplay(start + "-" + num);
-    }
-    return;
-  }
+function _roundIfFloat(num) {
+  if (!Number.isFinite(num)) return num;
+  if (Math.floor(num) === num) return num;
+  return parseFloat(num.toFixed(12));
 }
 
 function calculate() {
   try {
-    const rawDisplay = display.value.trim();
+    let expression = display.value
+      .replace(/×/g, "*")
+      .replace(/÷/g, "/")
+      .replace(/−/g, "-");
 
-    if (
-      (rawDisplay === "" || justCalculated || String(rawDisplay) === String(lastResult)) &&
-      lastOperator &&
-      lastOperand != null
-    ) {
-      const repeatExpr = `${lastResult}${lastOperator}${lastOperand}`;
-      let repeatResult = eval(preprocessPercentage(repeatExpr));
-      if (!isFinite(repeatResult)) throw Error();
-      repeatResult = parseFloat(repeatResult.toFixed(6));
-      showOnDisplay(String(repeatResult));
-      lastResult = repeatResult;
-      justCalculated = true;
-      return;
-    }
+    const ops = ['+', '-', '*', '/'];
+    const lastChar = expression.slice(-1);
 
-    const opRegex = /[+\-*/]$/;
-    let expression;
-
-    if (opRegex.test(rawDisplay)) {
-      const m = rawDisplay.match(/(.+?)([+\-*/])$/);
-      if (m) {
-        let prefix = m[1];      
-        const op = m[2];       
-
-        let lastNumMatch = prefix.match(/(-?\d+(\.\d+)?)$/);
-
-        if (!lastNumMatch) {
-          const prefixTrim = prefix.replace(/\.$/, "");
-          lastNumMatch = prefixTrim.match(/(-?\d+(\.\d+)?)$/);
-        }
-
-        const operandToUse = lastNumMatch ? lastNumMatch[1] : "0";
-
-        expression = rawDisplay + operandToUse;
-      } else {
-        expression = rawDisplay + "0";
+    if (ops.includes(lastChar)) {
+      const num = parseFloat(expression.slice(0, -1));
+      lastOperator = lastChar;
+      lastOperand = num;
+      expression = `${num}${lastChar}${num}`;
+    } else if (lastOperator && !ops.some(o => lastChar === o)) {
+      expression = `${expression}${lastOperator}${lastOperand}`;
+    } else {
+      const match = expression.match(/([\+\-\*\/])([^+\-*/]+)$/);
+      if (match) {
+        lastOperator = match[1];
+        lastOperand = parseFloat(match[2]);
       }
-    } else {
-      expression = rawDisplay;
     }
 
-    let processed = preprocessPercentage(expression);
-    let result = eval(processed);
-
-    if (!isFinite(result) || isNaN(result)) {
+    expression = expression.trim();
+    const rawResult = eval(expression);
+    if (!Number.isFinite(rawResult) || Number.isNaN(rawResult)) {
       display.value = "Error";
-      justCalculated = true;
       return;
     }
-
-    result = parseFloat(result.toFixed(6));
-
-    const match = expression.match(/(.+?)([+\-*/])(-?\d+(\.\d+)?)$/);
-    if (match) {
-      lastResult = result;
-      lastOperator = match[2];
-      lastOperand = parseFloat(match[3]);
-    } else {
-      lastOperator = null;
-      lastOperand = null;
-      lastResult = result;
-    }
-    showOnDisplay(String(result));
-    justCalculated = true;
+    const result = _roundIfFloat(rawResult);
+    display.value = String(result);
   } catch (e) {
-    showOnDisplay("Error");
-    justCalculated = true;
+    display.value = "Error";
   }
 }
 
-function preprocessPercentage(expression) {
-  expression = expression.replace(
-    /(\d+(\.\d+)?)\s*([+\-])\s*(\d+(\.\d+)?)%/g,
-    (match, num1, _dec1, operator, num2) => {
-      return `${num1}${operator}(${num1}*${num2}/100)`;
-    }
-  );
+function toggleSign() {
+  const expr = display.value;
+  const lastNumberMatch = expr.match(/(-?)(\d+(\.\d+)?)(?!.*\d)/);
+  if (!lastNumberMatch) {
+    if (expr.startsWith("-")) display.value = expr.slice(1);
+    else if (expr !== "0") display.value = "-" + expr;
+    return;
+  }
 
-  expression = expression.replace(/(\d+(\.\d+)?)%/g, (match, num) => {
-    return `(${num}/100)`;
-  });
-
-  return expression;
+  const sign = lastNumberMatch[1];
+  const number = lastNumberMatch[2];
+  const startIndex = expr.lastIndexOf(number);
+  if (sign === "-") {
+    display.value = expr.slice(0, startIndex - 1) + number;
+  } else {
+    display.value = expr.slice(0, startIndex) + "-" + number;
+  }
 }
 
-document.addEventListener("keydown", (event) => {
-  const key = event.key;
+function percent() {
+  const expr = display.value;
+  const lastNumberMatch = expr.match(/(\d+(\.\d+)?)(?!.*\d)/);
+  if (!lastNumberMatch) {
+    return;
+  }
+  const number = lastNumberMatch[0];
+  const startIndex = expr.lastIndexOf(number);
+  const before = expr.slice(0, startIndex);
+  const newNumber = String(parseFloat(number) / 100);
+  display.value = before + newNumber;
+}
 
-  if (key === "=") {
-    event.preventDefault();
-    calculate();
+document.addEventListener('keydown', (e) => {
+  const key = e.key;
+
+  const allowedKeys = [
+    "0","1","2","3","4","5","6","7","8","9",
+    "+","-","*","/","%","(",")",".","Backspace","Enter","=","Escape"
+  ];
+
+  if (!allowedKeys.includes(key)) {
     return;
   }
 
-  if (key === "Enter") {
-    event.preventDefault();
+  if (key === "Enter" || key === "=") {
+    e.preventDefault();
     calculate();
-    return;
-  }
-
-  if (key === "Backspace") {
-    event.preventDefault();
+  } else if (key === "Backspace") {
+    e.preventDefault();
     back();
-    return;
-  }
-
-  if (key === "Escape" || key === "Delete") {
-    event.preventDefault();
-    clearDisplay(); 
-    return;
-  }
-
-  const allowed = "0123456789.+-*/%()";
-
-  if (allowed.includes(key)) {
-    event.preventDefault();     
+  } else if (key === "Escape") {
+    e.preventDefault();
+    clearDisplay();
+  } else if (key === "%") {
+    e.preventDefault();
+    percent();
+  } else {
     add2Display(key);
-    return;
   }
 });
